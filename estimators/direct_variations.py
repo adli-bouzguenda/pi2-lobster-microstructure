@@ -20,7 +20,7 @@ def estimate_hurst_direct(path):
 def estimate_hurst_direct2(path):
     n=len(path)-1
     S_N = compute_second_order_variations(path)
-    H_grid=np.linespace(1e-4, 1-1e-4,10000)
+    H_grid=np.linspace(1e-4, 1-1e-4,10000)
     Theoretical_S=(n**(-2*H_grid))*(4-2**(2*H_grid))
     return H_grid[np.argmin(np.abs(Theoretical_S-S_N))]
 
