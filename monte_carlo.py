@@ -3,7 +3,7 @@ from fbm import FBM
 from estimators.discrete_variations import estimate_hurst
 from scipy import stats
 import matplotlib.pyplot as plt
-from estimators.direct_variations import estimate_hurst_direct
+from estimators.direct_variations import estimate_hurst_direct,estimate_hurst_direct2
 
 # MONTE CARLO PARAMETERS
 
@@ -13,202 +13,162 @@ M = 100
 
 np.random.seed(42)
 
+
+def compute_metrics(estimates, H_true, M):
+    """Calcule biais, variance, RMSE, t-stat et p-value pour une liste d'estimations."""
+    estimates = np.array(estimates)
+    mean_H = np.mean(estimates)
+    bias = mean_H - H_true
+    var = np.var(estimates, ddof=1)
+    rmse = np.sqrt(np.mean((estimates - H_true) ** 2))
+    standard_error = np.sqrt(var / M)
+    t_stat = bias / standard_error
+    p_value = 2 * stats.t.sf(abs(t_stat), df=M - 1)
+    return bias, var, rmse, t_stat, p_value
+
+
 # MONTE CARLO EXPERIMENT
 
 def monte_carlo_experiment(H, N, M):
 
-    H_estimates = []
-    H_estimate_direct = []
+    est_multi_1 = []
+    est_multi_2 = []
+    est_direct_1 = []
+    est_direct_2 = []
 
     # 1. SIMULATION AND HURST ESTIMATION
 
     for i in range(M):
-
         process = FBM(n=N, hurst=H, length=1.0, method="daviesharte")
         path = process.fbm()
 
-        # MULTISCALE ESTIMATOR
-        H_hat = estimate_hurst(path, max_scale=10)
-        H_estimates.append(H_hat)
+        # MULTISCALE ESTIMATORS
+        H_m1, _ = estimate_hurst(path, 10, "filter1")
+        est_multi_1.append(H_m1)
 
-        # DIRECT ESTIMATOR
-        H_hat_direct = estimate_hurst_direct(path)
-        H_estimate_direct.append(H_hat_direct)
+        H_m2, _ = estimate_hurst(path, 10, "filter2")
+        est_multi_2.append(H_m2)
 
-    # 2. BIAS AND VARIANCE
+        # DIRECT ESTIMATORS
+        H_d1 = estimate_hurst_direct(path)
+        est_direct_1.append(H_d1)
 
-    # MULTISCALE ESTIMATOR
-    mean_H = np.mean(H_estimates)
-    bias = mean_H - H
-    var = np.var(H_estimates, ddof=1)
+        H_d2 = estimate_hurst_direct2(path)
+        est_direct_2.append(H_d2)
 
-    # DIRECT ESTIMATOR
-    mean_H_direct = np.mean(H_estimate_direct)
-    bias_direct = mean_H_direct - H
-    var_direct = np.var(H_estimate_direct, ddof=1)
+    # 2. METRICS FOR ALL 4 ESTIMATORS
 
-    # 3. RMSE
-
-    H_estimates = np.array(H_estimates)
-    H_estimate_direct = np.array(H_estimate_direct)
-
-    # MULTISCALE ESTIMATOR
-    squared_errors = (H_estimates - H)**2
-    rmse = np.sqrt(np.mean(squared_errors))
-
-    # DIRECT ESTIMATOR
-    squared_errors_direct = (H_estimate_direct - H)**2
-    rmse_direct = np.sqrt(np.mean(squared_errors_direct))
-
-    # 4. STUDENT T-TEST
-
-    # MULTISCALE ESTIMATOR
-    standard_error = np.sqrt(var / M)
-    t_stat = bias / standard_error
-    p_value = 2 * stats.t.sf(abs(t_stat), df=M - 1)
-
-    # DIRECT ESTIMATOR
-    standard_error_direct = np.sqrt(var_direct / M)
-    t_stat_direct = bias_direct / standard_error_direct
-    p_value_direct = 2 * stats.t.sf(abs(t_stat_direct), df=M - 1)
-
-    # 5. RETURN RESULTS
-
-    return (
-        bias, var, rmse, t_stat, p_value,
-        bias_direct, var_direct, rmse_direct,
-        t_stat_direct, p_value_direct
-    )
+    return {
+        "Multiscale (-1,1)": compute_metrics(est_multi_1, H, M),
+        "Multiscale (-1,2,-1)": compute_metrics(est_multi_2, H, M),
+        "Direct (-1,1)": compute_metrics(est_direct_1, H, M),
+        "Direct (-1,2,-1)": compute_metrics(est_direct_2, H, M),
+    }
 
 
-# MONTE CARLO STUDY - COMPARISON OF HURST ESTIMATORS
+# MONTE CARLO STUDY - COMPARISON OF 4 HURST ESTIMATORS
 
-print("\n" + "=" * 105)
-print("MONTE CARLO STUDY - MULTISCALE VS DIRECT ESTIMATOR")
+print("\n" + "=" * 115)
+print("MONTE CARLO STUDY - COMPARISON OF 4 HURST ESTIMATORS")
 print(f"Number of simulations per configuration: M = {M}")
-print("=" * 105)
+print("=" * 115)
 
 print(
-    f"{'N':>6} | {'H':>5} | {'Method':>10} | {'Bias':>10} | "
+    f"{'N':>6} | {'H':>5} | {'Method':<22} | {'Bias':>10} | "
     f"{'Variance':>12} | {'RMSE':>10} | {'t-stat':>9} | {'p-value':>9}"
 )
-print("-" * 105)
+print("-" * 115)
 
 for N in N_values:
     for H in H_values:
+        results = monte_carlo_experiment(H, N, M)
 
-        (bias, var, rmse, t_stat, p_value,
-         bias_direct, var_direct, rmse_direct,
-         t_stat_direct, p_value_direct) = monte_carlo_experiment(H, N, M)
+        for method_name, (bias, var, rmse, t_stat, p_value) in results.items():
+            print(
+                f"{N:>6} | {H:>5.2f} | {method_name:<22} | "
+                f"{bias:>10.4f} | {var:>12.6f} | {rmse:>10.4f} | "
+                f"{t_stat:>9.4f} | {p_value:>9.4f}"
+            )
 
-        # Multiscale estimator
-        print(
-            f"{N:>6} | {H:>5.2f} | {'Multiscale':>10} | "
-            f"{bias:>10.4f} | {var:>12.6f} | {rmse:>10.4f} | "
-            f"{t_stat:>9.4f} | {p_value:>9.4f}"
-        )
-
-        # Direct estimator
-        print(
-            f"{N:>6} | {H:>5.2f} | {'Direct':>10} | "
-            f"{bias_direct:>10.4f} | {var_direct:>12.6f} | "
-            f"{rmse_direct:>10.4f} | {t_stat_direct:>9.4f} | "
-            f"{p_value_direct:>9.4f}"
-        )
-
-        print("-" * 105)
+        print("-" * 115)
 
 
 # CONVERGENCE STUDY - H = 0.7
 
-
-rmse_values = []
-rmse_values_direct = []
+rmse_dict = {
+    "Multiscale (-1,1)": [],
+    "Multiscale (-1,2,-1)": [],
+    "Direct (-1,1)": [],
+    "Direct (-1,2,-1)": [],
+}
 
 for N in N_values:
-
-    (bias, var, rmse, t_stat, p_value,
-     bias_direct, var_direct, rmse_direct,
-     t_stat_direct, p_value_direct) = monte_carlo_experiment(0.7, N, M)
-
-    rmse_values.append(rmse)
-    rmse_values_direct.append(rmse_direct)
-
-
-# Multiscale estimator
-log_N = np.log(N_values)
-log_rmse = np.log(rmse_values)
-
-slope, intercep = np.polyfit(log_N, log_rmse, 1)
-fitted_line = slope * log_N + intercep
-
-
-# Direct estimator
-log_rmse_direct = np.log(rmse_values_direct)
-
-slope_direct, intercep_direct = np.polyfit(log_N, log_rmse_direct, 1)
-fitted_line_direct = slope_direct * log_N + intercep_direct
+    results = monte_carlo_experiment(0.7, N, M)
+    for method_name in rmse_dict:
+        # L'indice 2 correspond au RMSE dans (bias, var, rmse, t_stat, p_value)
+        rmse_dict[method_name].append(results[method_name][2])
 
 
 # CONVERGENCE RESULTS
 
-print("\n" + "=" * 65)
-print("CONVERGENCE STUDY - H = 0.7")
-print("=" * 65)
+print("\n" + "=" * 95)
+print("CONVERGENCE STUDY - H = 0.7 (RMSE)")
+print("=" * 95)
 
-print(f"{'N':>8} | {'RMSE Multiscale':>18} | {'RMSE Direct':>18}")
-print("-" * 65)
+print(
+    f"{'N':>6} | {'Multi (-1,1)':>18} | {'Multi (-1,2,-1)':>18} | "
+    f"{'Direct (-1,1)':>18} | {'Direct (-1,2,-1)':>18}"
+)
+print("-" * 95)
 
 for i, N in enumerate(N_values):
     print(
-        f"{N:>8} | {rmse_values[i]:>18.6f} | "
-        f"{rmse_values_direct[i]:>18.6f}"
+        f"{N:>6} | "
+        f"{rmse_dict['Multiscale (-1,1)'][i]:>18.6f} | "
+        f"{rmse_dict['Multiscale (-1,2,-1)'][i]:>18.6f} | "
+        f"{rmse_dict['Direct (-1,1)'][i]:>18.6f} | "
+        f"{rmse_dict['Direct (-1,2,-1)'][i]:>18.6f}"
     )
 
-print("-" * 65)
-print(f"Multiscale convergence slope: {slope:.4f}")
-print(f"Direct convergence slope:     {slope_direct:.4f}")
-print("=" * 65)
+print("-" * 95)
+
+log_N = np.log(N_values)
+slopes = {}
+
+for method_name, rmses in rmse_dict.items():
+    slope, intercept = np.polyfit(log_N, np.log(rmses), 1)
+    slopes[method_name] = (slope, intercept)
+    print(f"{method_name:<22} convergence slope: {slope:.4f}")
+
+print("=" * 95)
+
 
 # CONVERGENCE PLOT
 
-plt.figure(figsize=(9, 6))
+plt.figure(figsize=(10, 6))
 
-# Multiscale estimator
-plt.scatter(
-    log_N, log_rmse,
-    color="royalblue",
-    marker="o",
-    s=75,
-    label="Multiscale - Monte Carlo"
-)
+styles = {
+    "Multiscale (-1,1)": ("royalblue", "o"),
+    "Multiscale (-1,2,-1)": ("seagreen", "^"),
+    "Direct (-1,1)": ("darkorange", "s"),
+    "Direct (-1,2,-1)": ("crimson", "D"),
+}
 
-plt.plot(
-    log_N, fitted_line,
-    color="royalblue",
-    linestyle="--",
-    label=f"Multiscale regression (slope = {slope:.4f})"
-)
+for method_name, rmses in rmse_dict.items():
+    color, marker = styles[method_name]
+    slope, intercept = slopes[method_name]
+    log_rmse = np.log(rmses)
+    fitted_line = slope * log_N + intercept
 
-# Direct estimator
-plt.scatter(
-    log_N, log_rmse_direct,
-    color="darkorange",
-    marker="s",
-    s=75,
-    label="Direct - Monte Carlo"
-)
-
-plt.plot(
-    log_N, fitted_line_direct,
-    color="darkorange",
-    linestyle="--",
-    label=f"Direct regression (slope = {slope_direct:.4f})"
-)
+    plt.scatter(log_N, log_rmse, color=color, marker=marker, s=75, label=f"{method_name}")
+    plt.plot(
+        log_N, fitted_line, color=color, linestyle="--",
+        label=f"{method_name} fit (slope = {slope:.4f})"
+    )
 
 plt.xlabel("log(N)")
 plt.ylabel("log(RMSE)")
-plt.title("Convergence of Hurst Estimators (H = 0.7, M = 100)")
+plt.title("Convergence of the 4 Hurst Estimators (H = 0.7, M = 100)")
 plt.legend()
 plt.grid(True, alpha=0.3)
 plt.tight_layout()
