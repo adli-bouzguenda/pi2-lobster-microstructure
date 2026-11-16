@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from fbm import FBM
 from estimators.discrete_variations import estimate_hurst
-from estimators.direct_variations import estimate_hurst_direct
+from estimators.direct_variations import estimate_hurst_direct, estimate_hurst_direct2
 
 
 # SIMULATION PARAMETERS
@@ -27,50 +27,67 @@ t = process.times()
 path = process.fbm()
 
 
-# HURST EXPONENT ESTIMATION
+# HURST EXPONENT ESTIMATION (4 ESTIMATORS)
 
+# MULTISCALE ESTIMATORS (C unknown)
+H_multi_1, C_est_1 = estimate_hurst(path, 10, "filter1")
+H_multi_2, C_est_2 = estimate_hurst(path, 10, "filter2")
 
-# MULTISCALE ESTIMATOR
-H_estimated = estimate_hurst(path, max_scale=10)
-
-# DIRECT ESTIMATOR
-H_hat_direct = estimate_hurst_direct(path)
-
+# DIRECT ESTIMATORS (C = 1 known)
+H_direct_1 = estimate_hurst_direct(path)
+H_direct_2 = estimate_hurst_direct2(path)
 
 # ESTIMATION RESULTS
 
-print("\n" + "=" * 65)
+print("\n" + "=" * 80)
 print("FRACTIONAL BROWNIAN MOTION - HURST ESTIMATION")
-print("=" * 65)
+print("=" * 80)
 
 print(f"True Hurst exponent: {H:.4f}")
+print(f"True Scale parameter C: 1.0000")
 print(f"Number of increments: {N}")
 print(f"Time horizon: {T}")
-print("-" * 65)
+print("-" * 80)
 
-print(f"{'Method':<15} | {'Estimated H':>15} | {'Absolute Error':>15}")
-print("-" * 65)
+print(f"{'Method':<22} | {'Estimated H':>13} | {'Abs Error (H)':>15} | {'Estimated C':>13}")
+print("-" * 80)
 
-# MULTISCALE ESTIMATOR
+# MULTISCALE ESTIMATORS
 print(
-    f"{'Multiscale':<15} | "
-    f"{H_estimated:>15.4f} | "
-    f"{abs(H_estimated - H):>15.4f}"
+    f"{'Multiscale (-1,1)':<22} | "
+    f"{H_multi_1:>13.4f} | "
+    f"{abs(H_multi_1 - H):>15.4f} | "
+    f"{C_est_1:>13.4f}"
 )
 
-# DIRECT ESTIMATOR
 print(
-    f"{'Direct':<15} | "
-    f"{H_hat_direct:>15.4f} | "
-    f"{abs(H_hat_direct - H):>15.4f}"
+    f"{'Multiscale (-1,2,-1)':<22} | "
+    f"{H_multi_2:>13.4f} | "
+    f"{abs(H_multi_2 - H):>15.4f} | "
+    f"{C_est_2:>13.4f}"
 )
 
-print("=" * 65)
+# DIRECT ESTIMATORS
+print(
+    f"{'Direct (-1,1)':<22} | "
+    f"{H_direct_1:>13.4f} | "
+    f"{abs(H_direct_1 - H):>15.4f} | "
+    f"{'1.0000 (fixed)':>13}"
+)
+
+print(
+    f"{'Direct (-1,2,-1)':<22} | "
+    f"{H_direct_2:>13.4f} | "
+    f"{abs(H_direct_2 - H):>15.4f} | "
+    f"{'1.0000 (fixed)':>13}"
+)
+
+print("=" * 80)
 
 # TRAJECTORY INFORMATION
 
 print("\nTRAJECTORY INFORMATION")
-print("-" * 65)
+print("-" * 80)
 
 print(f"Number of time points: {len(t)}")
 print(f"Number of path values: {len(path)}")
